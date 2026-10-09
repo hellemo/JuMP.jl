@@ -935,6 +935,23 @@ end
 
 struct _InitNotProvided end
 
+# Return the elements of `x` as an `Array`, so that `sum` can dispatch to the
+# methods for `Array`. In particular, MutableArithmetics implements `sum` for
+# arrays of mutable elements (like JuMP expressions) by accumulating in-place,
+# whereas summing a generator allocates a new expression at each step, which is
+# O(n^2) in the number of elements.
+_sum_data(x::DenseAxisArray) = x.data
+
+function _sum_data(x::DenseAxisArrayView{T}) where {T}
+    # `collect(x)` does not support all axis types, so iterate instead.
+    data = T[]
+    sizehint!(data, length(x))
+    for xi in x
+        push!(data, xi)
+    end
+    return data
+end
+
 function Base.sum(
     f::F,
     x::Union{DenseAxisArray{T},DenseAxisArrayView{T}};
@@ -952,10 +969,16 @@ function Base.sum(
             """,
         )
     end
+    data = f === identity ? _sum_data(x) : map(f, _sum_data(x))
     if init == _InitNotProvided()
-        return sum(f(xi) for xi in x)
+        if isempty(data)
+            # Preserve the error that `sum` throws for an empty collection
+            # instead of returning `zero(eltype(data))`.
+            return sum(f(xi) for xi in x)
+        end
+        return sum(data)
     else
-        return sum(f(xi) for xi in x; init)
+        return sum(data; init)
     end
 end
 

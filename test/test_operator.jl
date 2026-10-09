@@ -619,6 +619,39 @@ function test_extension_higher_level(
     return
 end
 
+function test_sum_DenseAxisArray()
+    model = Model()
+    @variable(model, x[i in ["a", "b", "c"]])
+    @test x isa Containers.DenseAxisArray
+    @test isequal_canonical(sum(x), x["a"] + x["b"] + x["c"])
+    @test isequal_canonical(
+        sum(xi -> 2 * xi, x),
+        2 * x["a"] + 2 * x["b"] + 2 * x["c"],
+    )
+    @test isequal_canonical(sum(x; init = 1.0), x["a"] + x["b"] + x["c"] + 1.0)
+    # The elements must not be modified by the in-place summation
+    @expression(model, y[i in ["a", "b"]], 2.0 * x[i])
+    @test isequal_canonical(sum(y), 2 * x["a"] + 2 * x["b"])
+    @test isequal_canonical(y["a"], 2.0 * x["a"])
+    @test isequal_canonical(y["b"], 2.0 * x["b"])
+    z = view(x, ["a", "c"])
+    @test isequal_canonical(sum(z), x["a"] + x["c"])
+    return
+end
+
+function test_sum_DenseAxisArray_scales_linearly()
+    model = Model()
+    allocations = map((1_000, 4_000)) do n
+        x = @variable(model, [string.(1:n)])
+        sum(x)  # compile
+        return @allocated sum(x)
+    end
+    # Summing a generator of expressions allocates O(n^2) memory, so the ratio
+    # would be about 16.
+    @test allocations[2] / allocations[1] < 8
+    return
+end
+
 function test_complex_mult_variable()
     model = Model()
     @variable(model, x[1:3])

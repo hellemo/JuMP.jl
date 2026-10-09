@@ -1095,6 +1095,31 @@ function test_sum_init_any()
     return
 end
 
+function test_sum_view_and_function()
+    x = Containers.DenseAxisArray([1 2 3; 4 5 6], [:a, :b], ["x", "y", "z"])
+    @test sum(x) == 21
+    @test sum(xi -> 2xi, x) == 42
+    @test sum(x; init = 1) == 22
+    @test sum(xi -> 2xi, x; init = 1) == 43
+    y = view(x, :a, :)
+    @test y isa Containers.DenseAxisArrayView
+    @test sum(y) == 6
+    @test sum(yi -> 2yi, y) == 12
+    @test sum(y; init = 1) == 7
+    return
+end
+
+function test_sum_does_not_modify_elements()
+    # MutableArithmetics sums arrays of mutable elements in-place, so check
+    # that the elements of the array are not modified.
+    x = Containers.DenseAxisArray([big(1), big(2), big(3)], ["a", "b", "c"])
+    @test sum(x) == 6
+    @test x.data == [1, 2, 3]
+    @test sum(xi -> xi, x) == 6
+    @test x.data == [1, 2, 3]
+    return
+end
+
 function test_hash_equality()
     data = [1 2; 3 4; 5 6]
     x = Containers.DenseAxisArray(data, [:a, :b, :c], [:x, :y])
